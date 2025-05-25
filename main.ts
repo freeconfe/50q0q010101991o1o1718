@@ -5,10 +5,9 @@ const proxyIP = Deno.env.get('PROXYIP') || '';
 const credit = Deno.env.get('CREDIT') || 'DenoBy-ModsBots';
 
 // إعدادات المسؤول
-const ADMIN_USERNAME = "Crypta_AmineX9";
-const ADMIN_PASSWORD = "V!w7#zXp$Q94^Rm2&kT";
+const ADMIN_USERNAME = "amine";
+const ADMIN_PASSWORD = "amine";
 const BLOCK_DURATION = 5 * 60 * 60 * 1000; // 5 ساعات بالمللي ثانية
-const ADMIN_SESSION_COOKIE = 'admin_session';
 
 // تخزين محاولات تسجيل الدخول الفاشلة
 const failedAttempts = new Map<string, { attempts: number, lastAttempt: number, blockedUntil: number }>();
@@ -17,6 +16,78 @@ const CONFIG_FILE = 'config.json';
 
 interface Config {
   uuid?: string;
+}
+
+// Middleware للتحقق من المسؤول
+async function checkAdminAuth(request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  
+  if (url.pathname === '/admin-login' && request.method === 'POST') {
+    const formData = await request.formData();
+    const username = formData.get('username')?.toString();
+    const password = formData.get('password')?.toString();
+    
+    const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+    const attemptInfo = failedAttempts.get(ip) || { attempts: 0, lastAttempt: 0, blockedUntil: 0 };
+    
+    if (Date.now() < attemptInfo.blockedUntil) {
+      const remainingTime = Math.ceil((attemptInfo.blockedUntil - Date.now()) / (60 * 60 * 1000));
+      return new Response(JSON.stringify({ 
+        error: `تم حظرك لمدة 5 ساعات بسبب محاولات تسجيل دخول فاشلة متعددة. الوقت المتبقي: ${remainingTime} ساعة`
+      }), { 
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      failedAttempts.delete(ip);
+      
+      const sessionId = crypto.randomUUID();
+      const response = new Response(null, {
+        status: 302,
+        headers: {
+          'Location': `/${userID}`,
+          'Set-Cookie': `admin_session=${sessionId}; Path=/; Max-Age=3600`
+        }
+      });
+      return response;
+    } else {
+      const newAttempts = attemptInfo.attempts + 1;
+      const blockedUntil = newAttempts >= 3 ? Date.now() + BLOCK_DURATION : 0;
+      
+      failedAttempts.set(ip, {
+        attempts: newAttempts,
+        lastAttempt: Date.now(),
+        blockedUntil
+      });
+      
+      return new Response(JSON.stringify({ 
+        error: 'بيانات الدخول غير صحيحة' + 
+          (newAttempts >= 2 ? ` (محاولات متبقية قبل الحظر: ${3 - newAttempts})` : '')
+      }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+  
+  if (url.pathname === `/${userID}`) {
+    const cookies = request.headers.get('Cookie');
+    const sessionId = cookies?.split(';')
+      .map(c => c.trim())
+      .find(c => c.startsWith('admin_session='))
+      ?.split('=')[1];
+    
+    if (!sessionId) {
+      return new Response(null, {
+        status: 302,
+        headers: { 'Location': '/admin-login' }
+      });
+    }
+  }
+  
+  return null;
 }
 
 async function getUUIDFromConfig(): Promise<string | undefined> {
@@ -69,100 +140,6 @@ if (!isValidUUID(userID)) {
 console.log(Deno.version);
 console.log(`Final UUID in use: ${userID}`);
 
-// Middleware للتحقق من المسؤول
-async function checkAdminAuth(request: Request): Promise<Response | null> {
-  const url = new URL(request.url);
-  
-  // التحقق من الصلاحية للوصول إلى أي صفحة غير تسجيل الدخول
-  if (url.pathname !== '/admin-login' && !url.pathname.startsWith(`/${userID}`)) {
-    const cookies = request.headers.get('Cookie');
-    const sessionId = cookies?.split(';')
-      .map(c => c.trim())
-      .find(c => c.startsWith(`${ADMIN_SESSION_COOKIE}=`))
-      ?.split('=')[1];
-    
-    if (!sessionId) {
-      return new Response(null, {
-        status: 302,
-        headers: { 'Location': '/admin-login' }
-      });
-    }
-  }
-  
-  if (url.pathname === '/admin-login' && request.method === 'POST') {
-    try {
-      const formData = await request.formData();
-      const username = formData.get('username')?.toString();
-      const password = formData.get('password')?.toString();
-      
-      if (!username || !password) {
-        return new Response(JSON.stringify({ 
-          error: 'اسم المستخدم وكلمة المرور مطلوبان'
-        }), { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
-      const attemptInfo = failedAttempts.get(ip) || { attempts: 0, lastAttempt: 0, blockedUntil: 0 };
-      
-      if (Date.now() < attemptInfo.blockedUntil) {
-        const remainingTime = Math.ceil((attemptInfo.blockedUntil - Date.now()) / (60 * 60 * 1000));
-        return new Response(JSON.stringify({ 
-          error: `تم حظرك لمدة 5 ساعات. الوقت المتبقي: ${remainingTime} ساعة`
-        }), { 
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        failedAttempts.delete(ip);
-        
-        const sessionId = crypto.randomUUID();
-        return new Response(JSON.stringify({ 
-          success: true,
-          redirect: `/${userID}`
-        }), { 
-          status: 200,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Set-Cookie': `${ADMIN_SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; Max-Age=3600; SameSite=Lax`
-          }
-        });
-      } else {
-        const newAttempts = attemptInfo.attempts + 1;
-        const blockedUntil = newAttempts >= 3 ? Date.now() + BLOCK_DURATION : 0;
-        
-        failedAttempts.set(ip, {
-          attempts: newAttempts,
-          lastAttempt: Date.now(),
-          blockedUntil
-        });
-        
-        return new Response(JSON.stringify({ 
-          error: 'بيانات الدخول غير صحيحة' + 
-            (newAttempts >= 2 ? ` (محاولات متبقية قبل الحظر: ${3 - newAttempts})` : '')
-        }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      return new Response(JSON.stringify({ 
-        error: 'حدث خطأ أثناء معالجة طلبك'
-      }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-  
-  return null;
-}
-
 Deno.serve(async (request: Request) => {
   const authResponse = await checkAdminAuth(request);
   if (authResponse) return authResponse;
@@ -171,12 +148,47 @@ Deno.serve(async (request: Request) => {
   if (upgrade.toLowerCase() != 'websocket') {
     const url = new URL(request.url);
     switch (url.pathname) {
-      case '/':
-        return new Response(null, {
-          status: 302,
-          headers: { 'Location': '/admin-login' }
+      case '/': {
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Deno Proxy</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; color: #333; text-align: center; line-height: 1.6; }
+        .container { background-color: #ffffff; padding: 40px 60px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 600px; width: 90%; }
+        h1 { color: #2c3e50; font-size: 2.8em; margin-bottom: 20px; letter-spacing: 1px; }
+        p { font-size: 1.1em; color: #555; margin-bottom: 30px; }
+        .button-container { margin-top: 30px; }
+        .button { display: inline-block; background-color: #007bff; color: white; padding: 12px 25px; border-radius: 8px; text-decoration: none; font-size: 1.1em; transition: background-color 0.3s ease, transform 0.2s ease; box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2); }
+        .button:hover { background-color: #0056b3; transform: translateY(-2px); }
+        .footer { margin-top: 40px; font-size: 0.9em; color: #888; }
+        .footer a { color: #007bff; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Deno Proxy Online!</h1>
+        <p>Your VLESS over WebSocket proxy is up and running. Enjoy secure and efficient connections.</p>
+        <div class="button-container">
+            <a href="/${userID}" class="button">Get My VLESS Config</a>
+        </div>
+        <div class="footer">
+            Developed by <a href="https://t.me/amine_dz46" target="_blank">@amine_dz46</a> | 
+            Channel: <a href="https://t.me/aminehxdz" target="_blank">@aminehxdz</a>
+        </div>
+    </div>
+</body>
+</html>
+        `;
+        return new Response(htmlContent, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });
-        
+      }
+      
       case '/admin-login': {
         const loginHtml = `
 <!DOCTYPE html>
@@ -186,224 +198,51 @@ Deno.serve(async (request: Request) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
     <style>
-        :root {
-          --primary-color: #007AFF;
-          --error-color: #FF3B30;
-          --background-color: #F2F2F7;
-          --card-background: #FFFFFF;
-          --text-color: #000000;
-          --placeholder-color: #8E8E93;
-          --border-radius: 12px;
-          --input-height: 50px;
-          --button-height: 50px;
-          --spacing: 16px;
-          --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-        
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 100vh;
-          margin: 0;
-          background-color: var(--background-color);
-          color: var(--text-color);
-        }
-        
-        .login-container {
-          background-color: var(--card-background);
-          padding: 32px;
-          border-radius: var(--border-radius);
-          box-shadow: var(--shadow);
-          width: 100%;
-          max-width: 400px;
-          margin: var(--spacing);
-        }
-        
-        .logo {
-          text-align: center;
-          margin-bottom: 32px;
-        }
-        
-        h1 {
-          font-size: 22px;
-          font-weight: 600;
-          text-align: center;
-          margin-bottom: 24px;
-        }
-        
-        .form-group {
-          margin-bottom: var(--spacing);
-        }
-        
-        label {
-          display: block;
-          margin-bottom: 8px;
-          font-size: 14px;
-          color: var(--text-color);
-          font-weight: 500;
-        }
-        
-        input {
-          width: 100%;
-          height: var(--input-height);
-          padding: 0 16px;
-          border: 1px solid #C7C7CC;
-          border-radius: var(--border-radius);
-          font-size: 16px;
-          background-color: var(--card-background);
-          transition: border-color 0.2s;
-          box-sizing: border-box;
-        }
-        
-        input:focus {
-          outline: none;
-          border-color: var(--primary-color);
-        }
-        
-        input::placeholder {
-          color: var(--placeholder-color);
-        }
-        
-        button {
-          width: 100%;
-          height: var(--button-height);
-          padding: 0;
-          background-color: var(--primary-color);
-          color: white;
-          border: none;
-          border-radius: var(--border-radius);
-          font-size: 16px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background-color 0.2s;
-          margin-top: 8px;
-        }
-        
-        button:hover {
-          background-color: #0062CC;
-        }
-        
-        button:disabled {
-          background-color: #95B8E0;
-          cursor: not-allowed;
-        }
-        
-        .error {
-          color: var(--error-color);
-          font-size: 14px;
-          margin-top: 8px;
-          text-align: center;
-          min-height: 20px;
-        }
-        
-        .footer {
-          margin-top: 24px;
-          text-align: center;
-          color: var(--placeholder-color);
-          font-size: 13px;
-        }
-        
-        .notice {
-          margin-top: 24px;
-          text-align: center;
-          color: var(--primary-color);
-          font-size: 14px;
-          font-weight: 500;
-        }
-        
-        .notice a {
-          color: var(--primary-color);
-          text-decoration: none;
-          font-weight: 600;
-        }
-        
-        .notice a:hover {
-          text-decoration: underline;
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; }
+        .login-container { background-color: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: 600; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
+        .error { color: #dc3545; margin-top: 10px; text-align: center; }
+        .footer { margin-top: 30px; text-align: center; color: #888; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <div class="logo">
-            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#007AFF" stroke-width="2"/>
-                <path d="M12 16V16.01M12 8V12" stroke="#007AFF" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-        </div>
-        <h1>Sign in to Admin Panel</h1>
+        <h1>Admin Login</h1>
         <form id="loginForm">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter your username" required>
+                <input type="text" id="username" name="username" required>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                <input type="password" id="password" name="password" required>
             </div>
+            <button type="submit">Login</button>
             <div id="error" class="error"></div>
-            <button type="submit">Sign In</button>
         </form>
-        <div class="notice">
-            If you think you can access the interface, log in.<br>
-            Login is for website developer only<br>
-            Contact: <a href="https://t.me/amine_dz46" target="_blank">@amine_dz46</a> on Telegram<br>
-            Our channel: <a href="https://t.me/aminedz151" target="_blank">aminedz151</a>
-        </div>
         <div class="footer">
-            Unauthorized access is strictly prohibited
+            Only authorized administrators can access this system
         </div>
     </div>
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const errorElement = document.getElementById('error');
-            const submitButton = document.querySelector('button[type="submit"]');
-            errorElement.textContent = '';
-            submitButton.disabled = true;
-            submitButton.textContent = 'Signing in...';
+            const formData = new FormData(e.target);
+            const response = await fetch('/admin-login', {
+                method: 'POST',
+                body: formData
+            });
             
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            if (!username || !password) {
-                errorElement.textContent = 'Please fill in all fields';
-                submitButton.disabled = false;
-                submitButton.textContent = 'Sign In';
-                return;
-            }
-            
-            try {
-                const formData = new FormData();
-                formData.append('username', username);
-                formData.append('password', password);
-                
-                const response = await fetch('/admin-login', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    if (result.success) {
-                        // Successful login - redirect to main page
-                        window.location.href = result.redirect;
-                    } else {
-                        // Show error message if exists
-                        errorElement.textContent = result.error || 'Invalid credentials';
-                    }
-                } else {
-                    // Handle HTTP errors
-                    errorElement.textContent = result.error || 'Login failed';
-                }
-            } catch (err) {
-                console.error('Login error:', err);
-                errorElement.textContent = 'Network error, please try again';
-            } finally {
-                submitButton.disabled = false;
-                submitButton.textContent = 'Sign In';
+            const result = await response.json();
+            if (response.ok) {
+                window.location.href = '/${userID}';
+            } else {
+                document.getElementById('error').textContent = result.error;
             }
         });
     </script>
@@ -448,7 +287,7 @@ Deno.serve(async (request: Request) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VLESS Configuration</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; color: #333; text-align: center; line-height: 1.6; padding: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; color: #333; text-align: center; line-height: 1.6; padding: 20px; }
         .container { background-color: #ffffff; padding: 40px 60px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 800px; width: 90%; margin-bottom: 20px; }
         h1 { color: #2c3e50; font-size: 2.5em; margin-bottom: 20px; letter-spacing: 1px; }
         h2 { color: #34495e; font-size: 1.8em; margin-top: 30px; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
@@ -508,7 +347,7 @@ Deno.serve(async (request: Request) => {
         }
         
         function logout() {
-            document.cookie = '${ADMIN_SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            document.cookie = 'admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
             window.location.href = '/admin-login';
         }
     </script>
@@ -530,7 +369,6 @@ Deno.serve(async (request: Request) => {
   }
 })
 
-// باقي الدوال المساعدة تبقى كما هي دون تغيير
 async function vlessOverWSHandler(request: Request) {
   const { socket, response } = Deno.upgradeWebSocket(request)
   let address = ''
