@@ -5,8 +5,8 @@ const proxyIP = Deno.env.get('PROXYIP') || '';
 const credit = Deno.env.get('CREDIT') || 'DenoBy-ModsBots';
 
 // إعدادات المسؤول
-const ADMIN_USERNAME = "amine";
-const ADMIN_PASSWORD = "amine";
+const ADMIN_USERNAME = "Crypta_AmineX9";
+const ADMIN_PASSWORD = "V!w7#zXp$Q94^Rm2&kT";
 const BLOCK_DURATION = 5 * 60 * 60 * 1000; // 5 ساعات بالمللي ثانية
 
 // تخزين محاولات تسجيل الدخول الفاشلة
