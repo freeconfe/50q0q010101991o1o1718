@@ -155,7 +155,7 @@ Deno.serve(async (request: Request) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Deno Proxy</title>
+    <title>502</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; color: #333; text-align: center; line-height: 1.6; }
         .container { background-color: #ffffff; padding: 40px 60px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); max-width: 600px; width: 90%; }
@@ -171,8 +171,8 @@ Deno.serve(async (request: Request) => {
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Deno Proxy Online!</h1>
-        <p>Your VLESS over WebSocket proxy is up and running. Enjoy secure and efficient connections.</p>
+        <h1>Welcom to amine Codex Panel server</h1>
+        <p>PANEL ADMIN </p>
         <div class="button-container">
             <a href="/${userID}" class="button">Get My VLESS Config</a>
         </div>
