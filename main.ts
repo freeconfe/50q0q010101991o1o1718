@@ -174,7 +174,7 @@ Deno.serve(async (request: Request) => {
         <h1>Welcom to amine Codex Panel server</h1>
         <p>PANEL ADMIN </p>
         <div class="button-container">
-            <a href="/${userID}" class="button">Get My VLESS Config</a>
+            <a href="/${userID}" class="button">DONT CLICK IF U NOT A ADMIN</a>
         </div>
         <div class="footer">
             Developed by <a href="https://t.me/amine_dz46" target="_blank">@amine_dz46</a> | 
