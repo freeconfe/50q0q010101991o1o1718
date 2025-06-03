@@ -2,7 +2,7 @@ import { exists } from "https://deno.land/std/fs/exists.ts";
 
 const envUUID = Deno.env.get('UUID') || 'e5185305-1984-4084-81e0-f77271159c62';
 const proxyIP = Deno.env.get('PROXYIP') || '';
-const credit = Deno.env.get('CREDIT') || 'DenoBy-ModsBots';
+const credit = Deno.env.get('CREDIT') || 'Amine-CodeX';
 
 // إعدادات المسؤول
 const ADMIN_USERNAME = "Crypta_AmineX9";
