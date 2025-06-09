@@ -32,7 +32,7 @@ const performanceStats = {
 // ==================== Constants ====================
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CLOSING = 2;
-const userID = 'e5185305-1984-4084-81e0-f77271159c62';
+const userID = 'a7be0aad-fd73-4b9a-aa65-e8fcffc67852';
 const proxyIP = Deno.env.get('PROXYIP') || '';
 
 // ==================== Helper Classes ====================
